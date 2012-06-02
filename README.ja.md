@@ -368,5 +368,175 @@
 
 ## 国際化(Internationalization)
 
+* 文字列やその他ロケール固有の設定はビュー、モデル、コントローラーで
+  利用すべきではありません。
+  これらのテキストは `config/locale` のロケールファイルに移動すべきです。
+* ActiveRecord のラベルを翻訳する必要がある場合は、
+  `activerecord` スコープを使いましょう。
+
+    ```
+    en:
+      activerecord:
+        models:
+          user: Member
+        attributes:
+          user:
+            name: "Full name"
+    ```
+
+    `User.model_name.human` は "Member" そして `User.human_attribute_name("name")`は、
+    "Ful name" を返すでしょう。
+
+* ビューで使われているテキストを ActiveRecord の attributes の翻訳から分割しましょう。
+  ロケールファイルを置きましょう。(以下分からず)
+  * ロケールファイルのまとまりが追加のディレクトリで行われている場合(ってなんだ?)、これらのディレクトリのファイルをロードするためには、 `application.rb` ファイルに記述する必要があります。
+
+        ```Ruby
+        # config/application.rb
+        config.i18n.load_path += Dir[Rails.root.join('config', 'locales', '**', '*.{rb,yml}')]
+        ```
+* `locales` ディレクトリのルートに、日付や通貨の書式などの共有ローカライズオプションを置きましょう。
+* `I18n.translate` の代わりに短縮形の `I18n.t` を使いましょう。
+  `I18n.localize` の代わりに `I18n.l` を使いましょう。
+* ビューで利用されるテキストのために "lazy" ルックアップを使いましょう。
+  次のような構造になっています。
+
+    ```
+    en:
+      users:
+        show:
+          title: "User details page"
+    ```
+
+    `users.show.title` の値は、テンプレート `app/views/users/show.html.haml` で
+    ルックアップされます。
+
+    ```Ruby
+    = t '.title'
+    ```
+
+* コントローラーやモデルでは `:scope` オプションで指定する代わりに、
+  ドットで区切られたキーを使いましょう。
+
+    ```Ruby
+    # こっちを使う
+    I18n.t 'activerecord.errors.messages.record_invalid'
+
+    # これの代わりに
+    I18n.t :record_invalid, :scope => [:activerecord, :errors, :messages]
+    ```
+
+* Railsのi18nに関する詳細な情報は  [Rails
+Guides](http://guides.rubyonrails.org/i18n.html) にあります。
+
+## アセット(Assets)
+
+アプリケーションをよりまとまったものにするために、
+[assets pipeline](http://guides.rubyonrails.org/asset_pipeline.html) を使いましょう。
+
+* カスタムの stylesheets, javascript, または images のために `app/assets` を使いましょう。
+* [jQuery](http://jquery.com/) や [bootstrap](http://twitter.github.com/bootstrap/) のようなサードパーティのコードは、 `vendor/assets` に置くべきです。
+* 可能であれば、 assets の gemified バージョンを使いましょう。
+  (例. [jquery-rails](https://github.com/rails/jquery-rails))
+  # gem を作れって事????
+
+## メーラー(Mailers)
+
+* `SomethingMailer` のようにメーラーに名前をつけましょう。
+  メーラーの接尾語がなければ、どのビューがメーラーに依存しているのか
+  すぐに分かりません。
+* HTMLとプレインテキストのテンプレートを提供しましょう。
+* 開発環境ではメールの配送が失敗した場合に、エラーがあがるようにしましょう。
+  デフォルトではエラーがあがりません。
+
+    ```Ruby
+    # config/environments/development.rb
+
+    config.action_mailer.raise_delivery_errors = true
+    ```
+
+* 開発環境のSMTPサーバとして、 `smtp.gmail.com` を使いましょう。
+  (ローカルのSMTPサーバを持っていないなら)
+ 
+    ```Ruby
+    # config/environments/development.rb
+
+    config.action_mailer.smtp_settings = {
+      address: 'smtp.gmail.com',
+      # more settings
+    }
+    ```
+
+* ホスト名のデフォルト設定を提供しましょう。
+
+    ```Ruby
+    # config/environments/development.rb
+    config.action_mailer.default_url_options = {host: "#{local_ip}:3000"}
+
+
+    # config/environments/production.rb
+    config.action_mailer.default_url_options = {host: 'your_site.com'}
+
+    # in your mailer class
+    default_url_options[:host] = 'your_site.com'
+    ```
+
+* メールにサイトのリンクを使う必要がある場合は、常に `_url` を使い、
+  `_path` メソッドは使わないようにしましょう。
+  `_url` メソッドはホスト名を含んでいますが、 `_path` メソッドは含んでいません。
+
+    ```Ruby
+    # wrong
+    You can always find more info about this course
+    = link_to 'here', url_for(course_path(@course))
+
+    # right
+    You can always find more info about this course
+    = link_to 'here', url_for(course_url(@course))
+    ```
+
+* from と to アドレスの書式を設定しましょう。
+  以下のようなフォーマットを使いましょう。
+
+    ```Ruby
+    # in your mailer class
+    default from: 'Your Name <info@your_site.com>'
+    ```
+
+* テスト環境で使うメール配信用のメソッドをはっきりさせましょう。
+  `test` に設定しましょう。
+
+    ```Ruby
+    # config/environments/test.rb
+
+    config.action_mailer.delivery_method = :test
+    ```
+
+  開発と本番環境で使う配信用のメソッドは `smtp` にすべきです。
+
+    ```Ruby
+    # config/environments/development.rb, config/environments/production.rb
+
+    config.action_mailer.delivery_method = :smtp
+    ```
+
+* いくつかのメールクライアントが外部のスタイルに問題があるとして、
+  HTMLメールを送信するときにすべてのスタイルは、インラインでなければいけません。
+  しかし、これは、メンテナンスを難しくし、コードの重複につながります。
+  スタイルを変換し、対応するHTMLタグを挿入する2つの似たようなgemがあります。
+  [premailer-rails3](https://github.com/fphilipe/premailer-rails3) と、
+  [roadie](https://github.com/Mange/roadie) です。
+
+* ページを生成している間にメールを送信するのは、避けるべきです。
+  これはページのロードを遅らせ、複数のメールを送った場合は、リクエストが
+  タイムアウトするでしょう。
+  メールをバックグラウンドで送信することで、回避します。
+   [delayed_job](https://github.com/tobi/delayed_job) gem の助けを借りましょう。
+
+
+
+
+ 
+
 
 
